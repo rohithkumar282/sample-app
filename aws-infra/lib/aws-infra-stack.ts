@@ -24,13 +24,13 @@ export class AwsInfraStack extends cdk.Stack {
       defaultRouteOptions: { integration: new integrations.WebSocketLambdaIntegration('DefaultIntegration', wsHandler) },
     });
 
-    new apigatewayv2.WebSocketStage(this, 'DevStage', {
+    const wsStage = new apigatewayv2.WebSocketStage(this, 'DevStage', {
       webSocketApi: wsApi,
       stageName: 'dev',
       autoDeploy: true,
     });
 
-    new cdk.CfnOutput(this, 'WebSocketUrl', { value: wsApi.apiEndpoint });
+    new cdk.CfnOutput(this, 'WebSocketUrl', { value: `${wsApi.apiEndpoint}/${wsStage.stageName}`});
 
     const websiteBucket = new s3.Bucket(this, "reactbucket-s3-webpage", {
       websiteIndexDocument: "index.html",
@@ -82,7 +82,7 @@ export class AwsInfraStack extends cdk.Stack {
             },
             environmentVariables: {
               REACT_APP_WEBSOCKET_URL: {
-                value: wsApi.apiEndpoint,
+                value: `${wsApi.apiEndpoint}/${wsStage.stageName}`,
               },
             },
             projectName: "reactWebsite",
