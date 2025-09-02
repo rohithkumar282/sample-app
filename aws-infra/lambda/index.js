@@ -1,25 +1,25 @@
-import {
+const {
   DynamoDBClient,
   PutItemCommand,
   DeleteItemCommand,
   ScanCommand
-} from "@aws-sdk/client-dynamodb";
-import { ApiGatewayManagementApi } from "@aws-sdk/client-apigatewaymanagementapi";
+} = require("@aws-sdk/client-dynamodb");
+const { ApiGatewayManagementApi } = require("@aws-sdk/client-apigatewaymanagementapi");
 
 const ddb = new DynamoDBClient({});
 const TABLE_NAME = process.env.CONNECTIONS_TABLE;
 
-export const handler = async (event) => {
+exports.handler = async (event) => {
   console.log("Event:", JSON.stringify(event, null, 2));
 
   const connectionId = event.requestContext.connectionId;
   const routeKey = event.requestContext.routeKey;
 
   if (routeKey === "$connect") {
-    // await ddb.send(new PutItemCommand({
-    //   TableName: TABLE_NAME,
-    //   Item: { connectionId: { S: connectionId } }
-    // }));
+    await ddb.send(new PutItemCommand({
+      TableName: TABLE_NAME,
+      Item: { connectionId: { S: connectionId } }
+    }));
     return { statusCode: 200 };
   }
 
