@@ -38,7 +38,7 @@ exports.handler = async (event) => {
     const connections = await ddb.send(new ScanCommand({ TableName: TABLE_NAME }));
 
     const apigw = new ApiGatewayManagementApi({
-      endpoint: `${event.requestContext.domainName}/${event.requestContext.stage}`
+      endpoint: `https://${event.requestContext.domainName}/${event.requestContext.stage}`
     });
 
     // Broadcast to all connected clients

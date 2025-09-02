@@ -1,6 +1,7 @@
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as codebuild from 'aws-cdk-lib/aws-codebuild';
@@ -39,6 +40,11 @@ export class AwsInfraStack extends cdk.Stack {
       stageName: 'dev',
       autoDeploy: true,
     });
+
+    wsHandler.addToRolePolicy(new iam.PolicyStatement({
+      actions: ['execute-api:ManageConnections'],
+      resources: [`arn:aws:execute-api:${this.region}:${this.account}:${wsApi.apiId}/${wsStage.stageName}/POST/@connections/*`]
+    }));
 
     new cdk.CfnOutput(this, 'WebSocketUrl', { value: `${wsApi.apiEndpoint}/${wsStage.stageName}`});
 
