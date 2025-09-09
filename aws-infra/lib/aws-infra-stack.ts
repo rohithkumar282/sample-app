@@ -5,8 +5,10 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as codebuild from 'aws-cdk-lib/aws-codebuild';
+import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as codepipeline from 'aws-cdk-lib/aws-codepipeline';
 import * as apigatewayv2 from 'aws-cdk-lib/aws-apigatewayv2';
+import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as integrations from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import * as codepipeline_actions from 'aws-cdk-lib/aws-codepipeline-actions';
 
@@ -49,18 +51,47 @@ export class AwsInfraStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'WebSocketUrl', { value: `${wsApi.apiEndpoint}/${wsStage.stageName}`});
 
     const websiteBucket = new s3.Bucket(this, "reactbucket-s3-webpage", {
-      websiteIndexDocument: "index.html",
-      websiteErrorDocument: "error.html",
       versioned: true,
-      publicReadAccess: true,
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ACLS_ONLY,
+      publicReadAccess: false,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       objectOwnership: s3.ObjectOwnership.BUCKET_OWNER_ENFORCED,
     })
 
-    new cdk.CfnOutput(this, 'S3WebsiteEndpoint', {
-      value: websiteBucket.bucketWebsiteUrl,
-      description: 'S3 website URL',
+    const originaccessidentity = new cloudfront.OriginAccessIdentity(this, 'WebsiteOAI', {
+      comment: 'OAI for CloudFront to access private S3 bucket',
     });
+
+    websiteBucket.addToResourcePolicy(new iam.PolicyStatement({
+      actions: ['s3:GetObject'],
+      resources: [websiteBucket.arnForObjects('*')],
+      principals: [
+        new iam.CanonicalUserPrincipal(originaccessidentity.cloudFrontOriginAccessIdentityS3CanonicalUserId),
+      ],
+    }));
+    
+    const distribution = new cloudfront.Distribution(this, 'WebsiteDistribution', {
+      defaultRootObject: 'index.html',
+      defaultBehavior: {
+        origin: origins.S3BucketOrigin.withOriginAccessControl(websiteBucket),
+        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+        allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
+        cachedMethods: cloudfront.CachedMethods.CACHE_GET_HEAD,
+      },
+      errorResponses: [
+        { httpStatus: 403, responseHttpStatus: 200, responsePagePath: '/index.html', ttl: cdk.Duration.minutes(0) },
+        { httpStatus: 404, responseHttpStatus: 200, responsePagePath: '/index.html', ttl: cdk.Duration.minutes(0) },
+      ]
+    });
+
+    new cdk.CfnOutput(this, 'CloudFrontDomainName', {
+      value: distribution.domainName,
+      description: 'Use this URL to access the website via CloudFront',
+    });
+
+    // new cdk.CfnOutput(this, 'S3WebsiteEndpoint', {
+    //   value: websiteBucket.bucketWebsiteUrl,
+    //   description: 'S3 website URL',
+    // });
 
     const outputSource = new codepipeline.Artifact();
     const outputWebsite = new codepipeline.Artifact();
@@ -92,7 +123,7 @@ export class AwsInfraStack extends cdk.Stack {
           actionName: "BuildUI",
           project: new codebuild.PipelineProject(this, "UIBuild", {
             environment: {
-              buildImage: codebuild.LinuxBuildImage.AMAZON_LINUX_2_4,
+              buildImage: codebuild.LinuxBuildImage.STANDARD_7_0,
               privileged: true,
               computeType: codebuild.ComputeType.SMALL
             },
